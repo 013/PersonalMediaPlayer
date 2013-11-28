@@ -1,23 +1,34 @@
 <?php
-/*
-id
-title
-type
-imdbid
-path
-date
-*/
 define("DB_DSN", "mysql:host=localhost;dbname=files");
 define("DB_USERNAME", "username");
 define("DB_PASSWORD", "password");
 $MV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/Movies/";
 $TV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/TV/";
+$serverIP = getServerIP();
+$sshpre = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP ";
 
 $action = isset($_GET['a']) ? $_GET['a'] : '';
 if ($action == 'insert' && isset($_GET['title']) && isset($_GET['type']) && isset($_GET['id']) && isset($_GET['path']) && isset($_GET['date']) ) {
 	insert($_GET['title'], $_GET['type'], $_GET['id'], $_GET['path'], $_GET['date']);
 	die();
+} elseif ($action == 'remote') {
+	switch ($_GET['i']) {
+		case 'pause':
+			system($sshpre . "\"echo \"pause\" | socat UNIX-CONNECT:/home/ryan/vlc.sock -\"");
+			break;
+		case 'fullscreen':
+			system($sshpre . "\"echo \"fullscreen\" | socat UNIX-CONNECT:/home/ryan/vlc.sock -\"");
+			break;
+	}
+	die();
 }
+/*
+ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP \" \"
+
+echo "pause" | socat UNIX-CONNECT:/home/ryan/vlc.sock -
+echo "get_title" | socat UNIX-CONNECT:/home/ryan/vlc.sock -
+echo "fullscreen" | socat UNIX-CONNECT:/home/ryan/vlc.sock -
+*/
 ?>
 <!DOCTYPE html>
 <html>
@@ -36,31 +47,22 @@ if ($action == 'insert' && isset($_GET['title']) && isset($_GET['type']) && isse
 .switch-inner:after {content: "Remote";}
 .switch-checkbox:checked + .switch-label .switch-inner {margin-left: 0;}
 .switch-checkbox:checked + .switch-label .switch-switch {right: 0px;}
-.play-button {
-background:#eee;
-text-decoration:none;
-color:#333;
-font-family:Arial, sans-serif;
-font-size:11px;
-font-weight:bold;
-padding:3px 5px;
-border:1px solid #aaa;
-border-radius:3px;
-cursor:default;
-}
-.play-button:hover {
-background-color:#f2f2f2;
-border-color:#888;
-box-shadow:0 0 2px #ccc;
-}
-.play-button:active {
-vertical-align:-1px;
-}
+.play-button {background:#eee;text-decoration:none;color:#333;font-family:Arial, sans-serif;font-size:11px;font-weight:bold;padding:3px 5px;border:1px solid #aaa;border-radius:3px;cursor:default;}
+.play-button:hover {background-color:#f2f2f2;border-color:#888;box-shadow:0 0 2px #ccc;}
+.play-button:active {vertical-align:-1px;}
 </style>
 <script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
 <script type="text/javascript">
 $(document).ready(function() {
 	$("#switch").click(function() { $(".search-form").toggle(); $(".remote-form").toggle(); });
+	$("#playbutton").click(function() {
+		console.log("PLAY/PAUSE");
+		$.get( "index.php", { a: "remote", i: "pause" } );
+	});
+	$("#fullscreenbutton").click(function() {
+		console.log("FULLSCREEN");
+		$.get( "index.php", { a: "remote", i: "fullscreen" } );
+	});
 });
 </script>
 </head>
@@ -88,13 +90,13 @@ $(document).ready(function() {
 			</form>
 	
 			<div class="remote-form" style="display: none">
-				<button type="button" class="btn btn-success btn-lg">
+				<button type="button" class="btn btn-success btn-lg" id="playbutton">
 					<span class="glyphicon glyphicon-play"></span>
 				</button>
 				<button type="button" class="btn btn-danger btn-lg">
 					<span class="glyphicon glyphicon-stop"></span>
 				</button>
-				<button type="button" class="btn btn-default btn-lg">
+				<button type="button" class="btn btn-default btn-lg" id="fullscreenbutton">
 					<span class="glyphicon glyphicon-resize-full"></span>
 				</button>
 			</div>
@@ -118,8 +120,9 @@ switch($action) {
 	case 'play':
 		$path = $MV_LOC.getPath($_GET['id']);
 		$serverIP = getServerIP();
-		echo "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP \"DISPLAY=:0 nohup /usr/bin/vlc --fullscreen --no-sub-autodetect-file \"$path\"\"";
-		system("ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP \"DISPLAY=:0 nohup /usr/bin/vlc --fullscreen --no-sub-autodetect-file \"$path\"\"");
+		$command = $sshpre." \"DISPLAY=:0 nohup /usr/bin/vlc --fullscreen --no-sub-autodetect-file \"$path\"\"";
+		echo $command;
+		system($command);
 		break;
 	default:
 		homepage();
