@@ -8,6 +8,7 @@ $serverIP = getServerIP();
 $sshpre = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP ";
 
 $action = isset($_GET['a']) ? $_GET['a'] : '';
+
 if ($action == 'insert' && isset($_GET['title']) && isset($_GET['type']) && isset($_GET['id']) && isset($_GET['path']) && isset($_GET['date']) ) {
 	insert($_GET['title'], $_GET['type'], $_GET['id'], $_GET['path'], $_GET['date']);
 	die();
@@ -19,6 +20,8 @@ if ($action == 'insert' && isset($_GET['title']) && isset($_GET['type']) && isse
 		case 'fullscreen':
 			system($sshpre . "\"echo \"fullscreen\" | socat UNIX-CONNECT:/home/ryan/vlc.sock -\"");
 			break;
+		default:
+			die();
 	}
 	die();
 }
@@ -33,7 +36,7 @@ echo "fullscreen" | socat UNIX-CONNECT:/home/ryan/vlc.sock -
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Movies and Shit</title>
+    <title>Movies </title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Bootstrap -->
 <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
@@ -69,7 +72,7 @@ $(document).ready(function() {
 <body>
 	<div class="container">
 		<div class="header">
-			<h3 class="text-muted">Movies <span class="glyphicon glyphicon-film"></span></h3>
+			<h3 class="text-muted"><a href="/">Movies <span class="glyphicon glyphicon-film"></span></a></h3>
 		</div>
 		<div class="jumbotron">
 			<div class="switch">
@@ -262,13 +265,14 @@ function objHTML($title, $year, $rating, $released, $genre, $plot, $posterurl, $
 	if ($AMrow == 3) { $x = "</div><div class=\"row\">"; } else { $x=''; }
 	
 	return <<<HTML
-<div class="col-md-4">	
+<div class="col-xs-12 col-md-4">	
 <h4>$title <a class="play-button" href="?a=play&id=$id"><span class="glyphicon glyphicon-play"></span></a></h4>
 <p><div style="width: 140px; float: left; padding-right: 5px;">
-<img src="http://linnit.pw/image.php?url=$posterurl" alt="$title" class="img-thumbnail img-responsive"></div>
+<img src="/image.php?url=$posterurl" alt="$title" class="img-thumbnail img-responsive"></div>
 $plot
 </p>
 </div>
+<div class="clearfix visible-xs"></div>
 $x
 HTML;
 }

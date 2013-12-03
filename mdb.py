@@ -5,12 +5,23 @@ import urllib2
 import json
 
 def main():
-	for i in xrange(110000,9999999):
+	for i in xrange(1600000,2000000):
 		getInfo("tt{0}".format(str(i).zfill(7)))
 
 def getInfo(id):
-	data = urllib2.urlopen('http://www.omdbapi.com/?i={0}'.format(id))
-	j = json.load(data)
+	try:
+		data = urllib2.urlopen('http://www.omdbapi.com/?i={0}'.format(id))
+	except urllib2.URLError, e:
+		print u"Error: {0}\nTrying again...".format(e)
+		try:
+			data = urllib2.urlopen('http://www.omdbapi.com/?i={0}'.format(id))
+		except urllib2.URLError, e:
+			print u"Error: {0}\nSkipping.".format(e)
+			return 1
+	try:
+		j = json.load(data)
+	except ValueError:
+		return 6
 	if j.has_key('Error'):
 		pass
 	if j.has_key('Title'):
