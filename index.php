@@ -2,12 +2,19 @@
 define("DB_DSN", "mysql:host=localhost;dbname=files");
 define("DB_USERNAME", "username");
 define("DB_PASSWORD", "password");
+$password = "password";
 $MV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/Movies/";
 $TV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/TV/";
 $serverIP = getServerIP();
 $sshpre = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP ";
-
+session_start();
 $action = isset($_GET['a']) ? $_GET['a'] : '';
+
+if (isset($_SESSION['auth'])) {
+	if ($_SESSION['auth'] == 1) {
+		$auth = true;
+	} else { $auth = false; }
+} else { $auth = false; }
 
 if ($action == 'insert' && isset($_GET['title']) && isset($_GET['type']) && isset($_GET['id']) && isset($_GET['path']) && isset($_GET['date']) ) {
 	insert($_GET['title'], $_GET['type'], $_GET['id'], $_GET['path'], $_GET['date']);
@@ -24,6 +31,11 @@ if ($action == 'insert' && isset($_GET['title']) && isset($_GET['type']) && isse
 			die();
 	}
 	die();
+} elseif ($action == 'signin') {
+	if ($_GET['password'] == $password) {
+		$_SESSION['auth'] = 1;
+		$auth = true;
+	}
 }
 /*
 ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP \" \"
@@ -71,7 +83,31 @@ $(document).ready(function() {
 </head>
 <body>
 	<div class="container">
-		<div class="header">
+<?php
+if ($auth == false) {
+	echo '
+<style type="text/css">
+body {padding-top: 40px;padding-bottom: 40px;background-color: #eee;}
+.form-signin {max-width: 330px;padding: 15px;margin: 0 auto;}
+.form-signin .form-signin-heading,.form-signin .checkbox {margin-bottom: 10px;}
+.form-signin .checkbox {font-weight: normal;}
+.form-signin .form-control {position: relative;font-size: 16px;height: auto;padding: 10px;-webkit-box-sizing: border-box;-moz-box-sizing: border-box;box-sizing: border-box;}
+.form-signin .form-control:focus {z-index: 2;}
+</style>
+<form class="form-signin">
+<h2 class="form-signin-heading">Please sign in</h2>
+<input type="hidden" name="a" value="signin">
+<input type="password" class="form-control" placeholder="Password" name="password" required>
+<label class="checkbox">
+<input type="checkbox" value="remember-me"> Remember me
+</label>
+<button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
+</form>';
+
+	die();
+}
+?>
+	<div class="header">
 			<h3 class="text-muted"><a href="/">Movies <span class="glyphicon glyphicon-film"></span></a></h3>
 		</div>
 		<div class="jumbotron">
@@ -108,6 +144,7 @@ $(document).ready(function() {
 		<? 
 		// Once this reaches 3, close the div and open a new one
 		$AMrow = 0;
+		echo pagination();
 		?>
 		<div class="row">
 
@@ -155,13 +192,27 @@ function homepage() {
 	$sql = "SELECT * FROM files LIMIT 0, 15";
 	$st = $conn->prepare($sql);
 	$st->execute();
-	
 	while ($row = $st->fetch()) {
 		$obj = getInfo($row['IMDbID']);
 		echo objHTML($obj["title"], $obj["year"], $obj["imdbRating"], $obj["released"], $obj["genre"], $obj["plot"], $obj["posterurl"], $row['id']);
 	}
 	
 	$conn = null;
+}
+
+function pagination() {
+	$currentPage = isset($_GET['page']) ? (int) $_GET['page'] : 0;
+	$np = $currentPage + 1;
+	$pp = $currentPage - 1;
+	$conn = new PDO (DB_DSN, DB_USERNAME, DB_PASSWORD);
+	$sql = "SELECT COUNT(*) FROM files";
+	$st = $conn->prepare($sql);
+	$st->execute();
+	$noPages = ceil($st->fetch()[0] / 15);
+	$html = $currentPage==0 ? "<ul class=\"pagination\"><li class=\"disabled\"><a href=\"#\">&laquo;</a></li>" : "<ul class=\"pagination\"><li><a href=\"?page=$pp\">&laquo;</a></li>";
+	for ($i=1;$i<=$noPages;$i++) { $html .= $i==$currentPage ? "<li class=\"active\"><a href=\"?page=$i\">$i</a></li>" : "<li><a href=\"?page=$i\">$i</a></li>"; }
+	$html .= $currentPage==$noPages ? "<li class=\"disabled\"><a href=\"?page=$np\">&raquo;</a></li></ul>" : "<li><a href=\"?page=$np\">&raquo;</a></li></ul>";
+	return $html;
 }
 
 function search($term) {
@@ -190,8 +241,8 @@ function getInfo($id) {
 		// If film not found, find it
 		$json = file_get_contents("http://www.omdbapi.com/?i=".$id);
 		$obj = json_decode($json, true);
-		insertmdb($id, $obj["Title"], $obj["Year"], $obj["imdbRating"], $obj["Released"], $obj["Genre"], $obj["Plot"], $obj["Poster"]);
 	
+		insertmdb($id, $obj["Title"], $obj["Year"], $obj["imdbRating"], $obj["Released"], $obj["Genre"], $obj["Plot"], $obj["Poster"]);
 		$sql = "SELECT * FROM imdb WHERE imdbid = :id";
 		$st = $conn->prepare($sql);
 		$st->bindValue(":id", $id, PDO::PARAM_STR);
@@ -262,7 +313,7 @@ function objHTML($title, $year, $rating, $released, $genre, $plot, $posterurl, $
 		$posterurl = 'http://linnit.pw/na.png';
 	}
 	$AMrow += 1;
-	if ($AMrow == 3) { $x = "</div><div class=\"row\">"; } else { $x=''; }
+	if ($AMrow == 3) { $AMrow = 0; $x = "</div><div class=\"row\">"; } else { $x=''; }
 	
 	return <<<HTML
 <div class="col-xs-12 col-md-4">	
