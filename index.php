@@ -2,13 +2,22 @@
 define("DB_DSN", "mysql:host=localhost;dbname=files");
 define("DB_USERNAME", "username");
 define("DB_PASSWORD", "password");
+
 $password = "password";
 $MV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/Movies/";
-$TV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/TV/";
-$serverIP = getServerIP();
-$sshpre = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP ";
+//$TV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/TV/";
+$clientIDfile = '/home/ryan/text.1234';
+$clientusername = 'ryan';
+
+$clientIP = getClientIP();
+$sshpre = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i $clientIDfile $clientusername@$clientIP ";
+
 session_start();
+
+// Once this reaches 3, close the div and open a new one
+$AMrow = 0;
 $action = isset($_GET['a']) ? $_GET['a'] : '';
+$currentPage = isset($_GET['page']) ? (int) $_GET['page'] : 0;
 
 if (isset($_SESSION['auth'])) {
 	if ($_SESSION['auth'] == 1) {
@@ -36,7 +45,6 @@ switch($action) {
 		break;
 	case 'play':
 		$path = $MV_LOC.getPath($_GET['id']);
-		$serverIP = getServerIP();
 		$command = $sshpre." \"DISPLAY=:0 nohup /usr/bin/vlc --fullscreen --no-sub-autodetect-file \"$path\"\"";
 		echo $command;
 		system($command);
@@ -47,6 +55,18 @@ switch($action) {
 			$_SESSION['auth'] = 1;
 			$auth = true;
 		}
+		break;
+	case 'ipupdate':
+		$conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+		$sql = "INSERT INTO clientip ( ip ) VALUES ( :ip )";
+		$st = $conn->prepare($sql);
+		$st->bindValue(":ip", $_SERVER['REMOTE_ADDR'], PDO::PARAM_STR);
+		//$st->bindValue(":date", time(), PDO::PARAM_INT);
+		$st->execute();
+		//$id = $conn->lastInsertId();
+		//echo $id;
+		$conn = null;
+		die();
 		break;
 }
 
@@ -157,14 +177,8 @@ body {padding-top: 40px;padding-bottom: 40px;background-color: #eee;}
 				</button>
 			</div>
 		</div>
-
-		<? 
-		// Once this reaches 3, close the div and open a new one
-		$AMrow = 0;
-		echo pagination();
-		?>
+		<? echo pagination(); ?>
 		<div class="row">
-
 <?php
 
 switch($action) {
@@ -178,18 +192,13 @@ switch($action) {
 		homepage();
 		break;
 }
-
+echo pagination();
 ?>
-	
 </div>
-
       <div class="footer">
-
         <p><!--&copy; 2013-->Linnit</p>
       </div>
-
     </div> <!-- /container -->
-
 <!-- Latest compiled and minified JavaScript -->
 <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
 </body>
@@ -198,9 +207,14 @@ switch($action) {
 
 function homepage() {
 	// Get latest added films
+	global $currentPage;
+	$x = $currentPage * 15;
+	$y = $x + 15;
 	$conn = new PDO (DB_DSN, DB_USERNAME, DB_PASSWORD);
-	$sql = "SELECT * FROM files LIMIT 0, 15";
+	$sql = "SELECT * FROM files ORDER BY id DESC LIMIT :x, :y";
 	$st = $conn->prepare($sql);
+	$st->bindValue(":x", $x, PDO::PARAM_INT);
+	$st->bindValue(":y", $y, PDO::PARAM_INT);
 	$st->execute();
 	while ($row = $st->fetch()) {
 		$obj = getInfo($row['IMDbID']);
@@ -211,7 +225,7 @@ function homepage() {
 }
 
 function pagination() {
-	$currentPage = isset($_GET['page']) ? (int) $_GET['page'] : 0;
+	global $currentPage;
 	$np = $currentPage + 1;
 	$pp = $currentPage - 1;
 	$conn = new PDO (DB_DSN, DB_USERNAME, DB_PASSWORD);
@@ -220,7 +234,7 @@ function pagination() {
 	$st->execute();
 	$noPages = ceil($st->fetch()[0] / 15);
 	$html = $currentPage==0 ? "<ul class=\"pagination\"><li class=\"disabled\"><a href=\"#\">&laquo;</a></li>" : "<ul class=\"pagination\"><li><a href=\"?page=$pp\">&laquo;</a></li>";
-	for ($i=1;$i<=$noPages;$i++) { $html .= $i==$currentPage ? "<li class=\"active\"><a href=\"?page=$i\">$i</a></li>" : "<li><a href=\"?page=$i\">$i</a></li>"; }
+	for ($i=0;$i<$noPages;$i++) { $html .= $i==$currentPage ? "<li class=\"active\"><a href=\"?page=$i\">$i</a></li>" : "<li><a href=\"?page=$i\">$i</a></li>"; }
 	$html .= $currentPage==$noPages ? "<li class=\"disabled\"><a href=\"?page=$np\">&raquo;</a></li></ul>" : "<li><a href=\"?page=$np\">&raquo;</a></li></ul>";
 	return $html;
 }
@@ -241,6 +255,7 @@ function search($term) {
 
 function getInfo($id) {
 	// Search local mdb
+	// Still a WIP
 	$conn = new PDO (DB_DSN, DB_USERNAME, DB_PASSWORD);
 	$sql = "SELECT * FROM imdb WHERE imdbid = :id";
 	$st = $conn->prepare($sql);
@@ -260,8 +275,6 @@ function getInfo($id) {
 		$row = $st->fetch();
 	}	
 	$conn = null;
-	//echo "<br>";
-	//echo count($row);
 	return $row;
 }
 
@@ -313,25 +326,31 @@ function getPath($id) {
 	return $path;
 }
 
-function getServerIP() {
-	return '151.224.105.183';
+function getClientIP() {
+	$conn = new PDO (DB_DSN, DB_USERNAME, DB_PASSWORD);
+	$sql = "SELECT * FROM clientip ORDER BY timestamp DESC";
+	$st = $conn->prepare($sql);
+	$st->execute();
+	$row = $st->fetch();
+	$conn = null;
+	return $row[0];
 }
 
 function objHTML($title, $year, $rating, $released, $genre, $plot, $posterurl, $id) {
 	global $AMrow;
 	if ($posterurl == 'N/A') {
-		$posterurl = 'http://linnit.pw/na.png';
+		$posterurl = 'http://'.$_SERVER['HTTP_HOST'].'/na.png';
 	}
 	$AMrow += 1;
-	if ($AMrow == 3) { $AMrow = 0; $x = "</div><div class=\"row\">"; } else { $x=''; }
-	
+	if ($AMrow == 3) {
+		$AMrow = 0;
+		$x = "</div><div class=\"row\">";
+	} else {
+		$x='';
+	}
 	return <<<HTML
 <div class="col-xs-12 col-md-4">	
-<h4>$title <button type="button" class="btn btn-success movieplay" id="mp$id">
-					<span class="glyphicon glyphicon-play"></span>
-				</button>
-				<!--
-				<a class="play-button" href="?a=play&id=$id"><span class="glyphicon glyphicon-play"></span></a>--></h4>
+<h4>$title <button type="button" class="btn btn-success movieplay" id="mp$id"><span class="glyphicon glyphicon-play"></span></button></h4>
 <p><div style="width: 140px; float: left; padding-right: 5px;">
 <img src="/image.php?url=$posterurl" alt="$title" class="img-thumbnail img-responsive"></div>
 $plot
