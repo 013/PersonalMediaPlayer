@@ -16,27 +16,40 @@ if (isset($_SESSION['auth'])) {
 	} else { $auth = false; }
 } else { $auth = false; }
 
-if ($action == 'insert' && isset($_GET['title']) && isset($_GET['type']) && isset($_GET['id']) && isset($_GET['path']) && isset($_GET['date']) ) {
-	insert($_GET['title'], $_GET['type'], $_GET['id'], $_GET['path'], $_GET['date']);
-	die();
-} elseif ($action == 'remote') {
-	switch ($_GET['i']) {
-		case 'pause':
-			system($sshpre . "\"echo \"pause\" | socat UNIX-CONNECT:/home/ryan/vlc.sock -\"");
-			break;
-		case 'fullscreen':
-			system($sshpre . "\"echo \"fullscreen\" | socat UNIX-CONNECT:/home/ryan/vlc.sock -\"");
-			break;
-		default:
-			die();
-	}
-	die();
-} elseif ($action == 'signin') {
-	if ($_GET['password'] == $password) {
-		$_SESSION['auth'] = 1;
-		$auth = true;
-	}
+switch($action) {
+	case 'insert':
+		insert($_GET['title'], $_GET['type'], $_GET['id'], $_GET['path'], $_GET['date']);
+		die();
+		break;
+	case 'remote':
+		switch ($_GET['i']) {
+			case 'pause':
+				system($sshpre . "\"echo \"pause\" | socat UNIX-CONNECT:/home/ryan/vlc.sock -\"");
+				break;
+			case 'fullscreen':
+				system($sshpre . "\"echo \"fullscreen\" | socat UNIX-CONNECT:/home/ryan/vlc.sock -\"");
+				break;
+			default:
+				die();
+		}
+		die();
+		break;
+	case 'play':
+		$path = $MV_LOC.getPath($_GET['id']);
+		$serverIP = getServerIP();
+		$command = $sshpre." \"DISPLAY=:0 nohup /usr/bin/vlc --fullscreen --no-sub-autodetect-file \"$path\"\"";
+		echo $command;
+		system($command);
+		die();
+		break;
+	case 'signin':
+		if ($_GET['password'] == $password) {
+			$_SESSION['auth'] = 1;
+			$auth = true;
+		}
+		break;
 }
+
 /*
 ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /home/ryan/text.1234 ryan@$serverIP \" \"
 
@@ -77,6 +90,10 @@ $(document).ready(function() {
 	$("#fullscreenbutton").click(function() {
 		console.log("FULLSCREEN");
 		$.get( "index.php", { a: "remote", i: "fullscreen" } );
+	});
+	$(".movieplay").click(function() {
+		console.log("Play:");
+		$.get( "index.php", { a: "play", id: $(this).attr("id").substr(2) } );
 	});
 });
 </script>
@@ -156,13 +173,6 @@ switch($action) {
 		break;
 	case 'info':
 		info($_GET['id']);
-		break;
-	case 'play':
-		$path = $MV_LOC.getPath($_GET['id']);
-		$serverIP = getServerIP();
-		$command = $sshpre." \"DISPLAY=:0 nohup /usr/bin/vlc --fullscreen --no-sub-autodetect-file \"$path\"\"";
-		echo $command;
-		system($command);
 		break;
 	default:
 		homepage();
@@ -317,7 +327,11 @@ function objHTML($title, $year, $rating, $released, $genre, $plot, $posterurl, $
 	
 	return <<<HTML
 <div class="col-xs-12 col-md-4">	
-<h4>$title <a class="play-button" href="?a=play&id=$id"><span class="glyphicon glyphicon-play"></span></a></h4>
+<h4>$title <button type="button" class="btn btn-success movieplay" id="mp$id">
+					<span class="glyphicon glyphicon-play"></span>
+				</button>
+				<!--
+				<a class="play-button" href="?a=play&id=$id"><span class="glyphicon glyphicon-play"></span></a>--></h4>
 <p><div style="width: 140px; float: left; padding-right: 5px;">
 <img src="/image.php?url=$posterurl" alt="$title" class="img-thumbnail img-responsive"></div>
 $plot
