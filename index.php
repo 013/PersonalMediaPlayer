@@ -1,8 +1,8 @@
 <?php
 require('password.php');
 define("DB_DSN", "mysql:host=localhost;dbname=files");
-define("DB_USERNAME", "username");
-define("DB_PASSWORD", "password");
+define("DB_USERNAME", "root");
+define("DB_PASSWORD", "linnit");
 
 $options = [ 'cost' => 12, ];
 $password = password_hash("password", PASSWORD_BCRYPT, $options);
@@ -27,7 +27,7 @@ if (isset($_SESSION['auth'])) {
 		$auth = true;
 	} else { $auth = false; }
 } else { $auth = false; }
-
+$auth = true;
 switch($action) {
 	case 'insert':
 		insert($_GET['title'], $_GET['type'], $_GET['id'], $_GET['path'], $_GET['date']);
@@ -368,9 +368,9 @@ function objHTML($title, $year, $rating, $released, $genre, $plot, $posterurl, $
 	}
 	return <<<HTML
 <div class="col-xs-12 col-md-4">	
-<h4>$title <button type="button" class="btn btn-success movieplay" id="mp$id"><span class="glyphicon glyphicon-play"></span></button></h4>
-<p><div style="width: 140px; float: left; padding-right: 5px;">
-<img src="/image.php?url=$posterurl" alt="$title" class="img-thumbnail img-responsive"></div>
+<h4><button type="button" class="btn btn-xs btn-success movieplay" id="mp$id"><span class="glyphicon glyphicon-play"></span></button> $title</h4>
+<p><div style="width: 130px; float: left;">
+<img src="/image.php?url=$posterurl" alt="$title" class="img-thumbnail img-responsive" width="125" height="185"></div>
 $plot
 </p>
 </div>

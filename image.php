@@ -1,22 +1,24 @@
 <?php
 
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $_GET['url']);
-curl_setopt($ch, CURLOPT_HEADER, 1);
-//curl_setopt($ch, CURLOPT_REFERER, "http://");
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-curl_setopt($ch, CURLOPT_BINARYTRANSFER, 1);
-$return = curl_exec($ch);
-curl_close($ch);
+$url = $_GET['url'];
+$ext = explode(".", $url);
+$ext = end($ext);
 
-list($header, $image) = explode("\r\n\r\n", $return, 2);
+if ($ext == 'png') {
+	$image = imagecreatefrompng($url);
+} else {
+	$image = imagecreatefromjpeg($url);
+}
 
+list($width, $height) = getimagesize($url);
 
 header('Content-Type: image/jpeg');
-//echo $header;
 
-echo $image;
-
+$image_p = imagecreatetruecolor(125, 185);
+imagecopyresampled($image_p, $image, 0, 0, 0, 0, 125, 185, $width, $height);
+imagedestroy($image);
+imagejpeg($image_p);
+imagedestroy($image_p);
 
 ?>
 
