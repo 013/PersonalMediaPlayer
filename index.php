@@ -1,13 +1,16 @@
 <?php
+require('password.php');
 define("DB_DSN", "mysql:host=localhost;dbname=files");
 define("DB_USERNAME", "username");
 define("DB_PASSWORD", "password");
 
-$password = "password";
+$options = [ 'cost' => 12, ];
+$password = password_hash("password", PASSWORD_BCRYPT, $options);
 $MV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/Movies/";
 //$TV_LOC = "/media/c2fb2794-b436-4446-bf3a-f8b05596f8d4/TV/";
 $clientIDfile = '/home/ryan/text.1234';
 $clientusername = 'ryan';
+$updateipPass = $password = password_hash("password", PASSWORD_BCRYPT, $options);
 
 $clientIP = getClientIP();
 $sshpre = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i $clientIDfile $clientusername@$clientIP ";
@@ -20,7 +23,7 @@ $action = isset($_GET['a']) ? $_GET['a'] : '';
 $currentPage = isset($_GET['page']) ? (int) $_GET['page'] : 0;
 
 if (isset($_SESSION['auth'])) {
-	if ($_SESSION['auth'] == 1) {
+	if (password_verify($_SESSION['pass'], $password)) {
 		$auth = true;
 	} else { $auth = false; }
 } else { $auth = false; }
@@ -51,20 +54,20 @@ switch($action) {
 		die();
 		break;
 	case 'signin':
-		if ($_GET['password'] == $password) {
+		if (password_verify($_POST['password'], $password)) {
 			$_SESSION['auth'] = 1;
+			$_SESSION['pass'] = $_POST['password'];
 			$auth = true;
 		}
 		break;
 	case 'ipupdate':
+		// index.php?a=ipupdate&p=$updateipPass
+		if (!password_verify($_GET['p'], $updateipPass)) die();
 		$conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
 		$sql = "INSERT INTO clientip ( ip ) VALUES ( :ip )";
 		$st = $conn->prepare($sql);
 		$st->bindValue(":ip", $_SERVER['REMOTE_ADDR'], PDO::PARAM_STR);
-		//$st->bindValue(":date", time(), PDO::PARAM_INT);
 		$st->execute();
-		//$id = $conn->lastInsertId();
-		//echo $id;
 		$conn = null;
 		die();
 		break;
@@ -131,7 +134,7 @@ body {padding-top: 40px;padding-bottom: 40px;background-color: #eee;}
 .form-signin .form-control {position: relative;font-size: 16px;height: auto;padding: 10px;-webkit-box-sizing: border-box;-moz-box-sizing: border-box;box-sizing: border-box;}
 .form-signin .form-control:focus {z-index: 2;}
 </style>
-<form class="form-signin">
+<form class="form-signin" method="POST" action="?a=signin">
 <h2 class="form-signin-heading">Please sign in</h2>
 <input type="hidden" name="a" value="signin">
 <input type="password" class="form-control" placeholder="Password" name="password" required>
@@ -192,6 +195,7 @@ switch($action) {
 		homepage();
 		break;
 }
+if ($AMrow != 3) { echo "</div>"; }
 echo pagination();
 ?>
 </div>
@@ -226,25 +230,39 @@ function homepage() {
 
 function pagination() {
 	global $currentPage;
+	global $action;
 	$np = $currentPage + 1;
 	$pp = $currentPage - 1;
 	$conn = new PDO (DB_DSN, DB_USERNAME, DB_PASSWORD);
-	$sql = "SELECT COUNT(*) FROM files";
+	if ($action == 'search') {
+		$sql = "SELECT COUNT(*) FROM files WHERE title like :searchterm";
+	} else {
+		$sql = "SELECT COUNT(*) FROM files";
+	}
 	$st = $conn->prepare($sql);
+	if ($action == 'search') $st->bindValue(":searchterm", '%'.$_GET['s'].'%', PDO::PARAM_STR);
 	$st->execute();
 	$noPages = ceil($st->fetch()[0] / 15);
-	$html = $currentPage==0 ? "<ul class=\"pagination\"><li class=\"disabled\"><a href=\"#\">&laquo;</a></li>" : "<ul class=\"pagination\"><li><a href=\"?page=$pp\">&laquo;</a></li>";
-	for ($i=0;$i<$noPages;$i++) { $html .= $i==$currentPage ? "<li class=\"active\"><a href=\"?page=$i\">$i</a></li>" : "<li><a href=\"?page=$i\">$i</a></li>"; }
-	$html .= $currentPage==$noPages ? "<li class=\"disabled\"><a href=\"?page=$np\">&raquo;</a></li></ul>" : "<li><a href=\"?page=$np\">&raquo;</a></li></ul>";
+	$urlP = isset($_GET['s']) && isset($_GET['a']) ? "?a=search&s={$_GET['s']}&page=" : "?page=";
+	$html = "<div style=\"display: table; margin: 0 auto\">";
+	$html .= $currentPage==0 ? "<ul class=\"pagination\"><li class=\"disabled\"><a href=\"$urlP$pp\">&laquo;</a></li>" : "<ul class=\"pagination\"><li><a href=\"$urlP$pp\">&laquo;</a></li>";
+	for ($i=0;$i<$noPages;$i++) { $html .= $i==$currentPage ? "<li class=\"active\"><a href=\"$urlP$i\">$i</a></li>" : "<li><a href=\"$urlP$i\">$i</a></li>"; }
+	$html .= $currentPage==$noPages ? "<li class=\"disabled\"><a href=\"$urlP$np\">&raquo;</a></li></ul></div>" : "<li><a href=\"$urlP$np\">&raquo;</a></li></ul></div>";
 	return $html;
 }
 
 function search($term) {
+	global $currentPage;
+	$x = $currentPage * 15;
+	$y = $x + 15;
+	//$sql = "SELECT * FROM files ORDER BY id DESC LIMIT :x, :y";
 	// Search for a searchterm
 	$conn = new PDO (DB_DSN, DB_USERNAME, DB_PASSWORD);
-	$sql = "SELECT * FROM files WHERE title like :searchterm";
+	$sql = "SELECT * FROM files WHERE title like :searchterm ORDER BY id DESC LIMIT :x, :y";
 	$st = $conn->prepare($sql);
 	$st->bindValue(":searchterm", '%'.$term.'%', PDO::PARAM_STR);
+	$st->bindValue(":x", $x, PDO::PARAM_INT);
+	$st->bindValue(":y", $y, PDO::PARAM_INT);
 	$st->execute();
 	while ($row = $st->fetch()) {
 		$obj = getInfo($row['IMDbID']);
@@ -279,18 +297,18 @@ function getInfo($id) {
 }
 
 function insert($title, $type, $id, $path, $date) {
-		$conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
-		$sql = "INSERT INTO files ( title, type, IMDbID, path, date) VALUES ( :title, :type, :id, :path, :date)";
-		$st = $conn->prepare($sql);
-		$st->bindValue(":title", $title, PDO::PARAM_STR);
-		$st->bindValue(":type", $type, PDO::PARAM_STR);
-		$st->bindValue(":id", $id, PDO::PARAM_STR);
-		$st->bindValue(":path", $path, PDO::PARAM_STR);
-		$st->bindValue(":date", $date, PDO::PARAM_STR);
-		$st->execute();
-		$id = $conn->lastInsertId();
-		echo $id;
-		$conn = null;
+	$conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+	$sql = "INSERT INTO files ( title, type, IMDbID, path, date) VALUES ( :title, :type, :id, :path, :date)";
+	$st = $conn->prepare($sql);
+	$st->bindValue(":title", $title, PDO::PARAM_STR);
+	$st->bindValue(":type", $type, PDO::PARAM_STR);
+	$st->bindValue(":id", $id, PDO::PARAM_STR);
+	$st->bindValue(":path", $path, PDO::PARAM_STR);
+	$st->bindValue(":date", $date, PDO::PARAM_STR);
+	$st->execute();
+	$id = $conn->lastInsertId();
+	echo $id;
+	$conn = null;
 }
 
 function insertmdb($id, $title, $year, $imdbRating, $released, $genre, $plot, $poster) {
